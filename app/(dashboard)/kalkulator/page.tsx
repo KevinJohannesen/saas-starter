@@ -31,10 +31,18 @@ import {
   FileText,
   Settings,
 } from "lucide-react";
+import { generateProjectReport } from "@/components/pdf-report-generator";
 
 interface CostItem {
   name: string;
   amount: number;
+}
+
+interface SavedProject {
+  id?: number; // Legg til optional id
+  name: string;
+  hours: number;
+  cost: number;
 }
 
 export default function CalculatorPage() {
@@ -69,9 +77,7 @@ export default function CalculatorPage() {
   // Prosjektspesifikk kalkulator
   const [projectHours, setProjectHours] = useState(140);
   const [projectName, setProjectName] = useState("");
-  const [savedProjects, setSavedProjects] = useState<
-    { name: string; hours: number; cost: number }[]
-  >([
+  const [savedProjects, setSavedProjects] = useState<SavedProject[]>([
     { name: "Sentrum Kontorbygg", hours: 1200, cost: 0 },
     { name: "Riksvei Brureparasjon", hours: 850, cost: 0 },
     { name: "Boligkompleks", hours: 2400, cost: 0 },
@@ -319,6 +325,56 @@ export default function CalculatorPage() {
     generalCosts,
   ]);
 
+  // Legg til denne funksjonen i CalculatorPage komponenten:
+  const deleteProject = async (projectId: number | undefined) => {
+    if (!projectId) {
+      console.error("Kan ikke slette prosjekt uten ID");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/team/projects?id=${projectId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Hent oppdatert liste med prosjekter
+      const projectsResponse = await fetch("/api/team/projects");
+      if (projectsResponse.ok) {
+        const projects = await projectsResponse.json();
+        if (Array.isArray(projects)) {
+          setSavedProjects(projects);
+        }
+      }
+    } catch (error) {
+      console.error("Feil ved sletting av prosjekt:", error);
+    }
+  };
+
+  const handleExportReport = () => {
+    const reportData = {
+      projectName,
+      projectHours,
+      projectIndirectCost,
+      indirectCostRate,
+      numberOfEmployees,
+      averageHoursPerEmployee,
+      totalAnnualHours,
+      totalAnnualIndirectCosts,
+      overheadCosts,
+      equipmentCosts,
+      generalCosts,
+      overheadTotal,
+      equipmentTotal,
+      generalTotal,
+    };
+
+    generateProjectReport(reportData);
+  };
+
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
       <div>
@@ -532,7 +588,7 @@ export default function CalculatorPage() {
                 </div>
               </CardContent>
               <CardFooter className="justify-end">
-                <Button variant="outline">
+                <Button variant="outline" onClick={handleExportReport}>
                   <Download className="mr-2 h-4 w-4" />
                   Eksporter rapport
                 </Button>
@@ -560,11 +616,12 @@ export default function CalculatorPage() {
                       Indirekte kostnad
                     </TableHead>
                     <TableHead className="text-right">Sats</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {savedProjects.map((project, index) => (
-                    <TableRow key={index}>
+                    <TableRow key={project.id || `temp-${index}`}>
                       <TableCell className="font-medium">
                         {project.name}
                       </TableCell>
@@ -580,6 +637,22 @@ export default function CalculatorPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {indirectCostRate.toFixed(2)} kr/t
+                      </TableCell>
+                      <TableCell>
+                        {project.id ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteProject(project.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Eksempel
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
