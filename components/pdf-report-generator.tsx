@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface CostItem {
   name: string;
@@ -28,92 +29,86 @@ export const generateProjectReport = (data: ProjectReportData) => {
   const margin = 20;
   let yPosition = 30;
 
-  // Header
-  pdf.setFontSize(20);
+  // Myke farger (Tripletex-stil)
+  const softBlue = { r: 240, g: 248, b: 255 };
+  const softGreen = { r: 245, g: 255, b: 245 };
+  const softGray = { r: 248, g: 249, b: 250 };
+  const softOrange = { r: 255, g: 250, b: 240 };
+  const borderGray = { r: 220, g: 220, b: 220 };
+  const textDark = { r: 33, g: 37, b: 41 };
+
+  // Header - enkel og ren
+  pdf.setTextColor(textDark.r, textDark.g, textDark.b);
+  pdf.setFontSize(22);
   pdf.setFont("helvetica", "bold");
   pdf.text("Prosjektkostnadsrapport", margin, yPosition);
 
-  yPosition += 15;
-  pdf.setFontSize(12);
+  yPosition += 8;
+  pdf.setFontSize(10);
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor(108, 117, 125); // Grå tekst
+  pdf.text(
+    `Generert ${new Date().toLocaleDateString("no-NO")}`,
+    margin,
+    yPosition
+  );
+
+  yPosition += 25;
+  pdf.setTextColor(textDark.r, textDark.g, textDark.b);
+
+  // Prosjektinformasjon - myk boks
+  pdf.setFillColor(softBlue.r, softBlue.g, softBlue.b);
+  pdf.setDrawColor(borderGray.r, borderGray.g, borderGray.b);
+  pdf.rect(margin, yPosition - 8, pageWidth - 2 * margin, 30, "FD");
+
+  pdf.setFontSize(14);
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Prosjektinformasjon", margin + 8, yPosition + 2);
+
+  pdf.setFontSize(10);
   pdf.setFont("helvetica", "normal");
   pdf.text(
-    `Generert: ${new Date().toLocaleDateString("no-NO")}`,
-    margin,
-    yPosition
+    `Navn: ${data.projectName || "Ikke spesifisert"}`,
+    margin + 8,
+    yPosition + 12
+  );
+  pdf.text(
+    `Timer: ${data.projectHours.toLocaleString()}`,
+    margin + 8,
+    yPosition + 20
+  );
+  pdf.text(
+    `Sats: ${data.indirectCostRate.toFixed(2)} kr/time`,
+    pageWidth - 100,
+    yPosition + 12
   );
 
-  yPosition += 20;
+  yPosition += 40;
 
-  // Prosjektinformasjon
-  pdf.setFontSize(16);
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Prosjektinformasjon", margin, yPosition);
+  // Hovedresultat - myk grønn boks
+  pdf.setFillColor(softGreen.r, softGreen.g, softGreen.b);
+  pdf.setDrawColor(borderGray.r, borderGray.g, borderGray.b);
+  pdf.rect(margin, yPosition, pageWidth - 2 * margin, 35, "FD");
 
-  yPosition += 10;
   pdf.setFontSize(12);
-  pdf.setFont("helvetica", "normal");
-  pdf.text(
-    `Prosjektnavn: ${data.projectName || "Ikke spesifisert"}`,
-    margin,
-    yPosition
-  );
-
-  yPosition += 8;
-  pdf.text(
-    `Estimerte timer: ${data.projectHours.toLocaleString()} timer`,
-    margin,
-    yPosition
-  );
-
-  yPosition += 8;
-  pdf.text(
-    `Indirekte kostnadssats: ${data.indirectCostRate.toFixed(2)} kr/time`,
-    margin,
-    yPosition
-  );
-
-  yPosition += 20;
-
-  // Hovedresultat
-  pdf.setFontSize(16);
   pdf.setFont("helvetica", "bold");
-  pdf.text("Prosjektets indirekte kostnad", margin, yPosition);
+  pdf.text("Total indirekte kostnad", margin + 8, yPosition + 12);
 
-  yPosition += 15;
-  pdf.setFontSize(24);
-  pdf.setTextColor(0, 100, 0); // Grønn farge
+  pdf.setFontSize(20);
+  pdf.setTextColor(40, 167, 69); // Grønn farge for beløp
   pdf.text(
     `${data.projectIndirectCost.toLocaleString("no-NO", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })} kr`,
-    margin,
-    yPosition
+    margin + 8,
+    yPosition + 28
   );
 
-  yPosition += 10;
-  pdf.setFontSize(10);
-  pdf.setTextColor(128, 128, 128); // Grå farge
-  pdf.text(
-    `Basert på ${data.projectHours} timer til ${data.indirectCostRate.toFixed(
-      2
-    )} kr/time`,
-    margin,
-    yPosition
-  );
+  yPosition += 50;
+  pdf.setTextColor(textDark.r, textDark.g, textDark.b);
 
-  pdf.setTextColor(0, 0, 0); // Tilbake til svart
-  yPosition += 25;
-
-  // Kostnadsfordeling
-  pdf.setFontSize(14);
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Kostnadsfordeling", margin, yPosition);
-
-  yPosition += 15;
-  pdf.setFontSize(11);
-  pdf.setFont("helvetica", "normal");
-
+  // Kostnadsfordeling som tabell
   const overheadProjectCost =
     (data.overheadTotal / data.totalAnnualHours) * data.projectHours;
   const equipmentProjectCost =
@@ -121,176 +116,235 @@ export const generateProjectReport = (data: ProjectReportData) => {
   const generalProjectCost =
     (data.generalTotal / data.totalAnnualHours) * data.projectHours;
 
-  pdf.text(
-    `Overhead: ${overheadProjectCost.toLocaleString("no-NO", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })} kr`,
-    margin,
-    yPosition
-  );
-
-  yPosition += 8;
-  pdf.text(
-    `Utstyr: ${equipmentProjectCost.toLocaleString("no-NO", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })} kr`,
-    margin,
-    yPosition
-  );
-
-  yPosition += 8;
-  pdf.text(
-    `Generelt: ${generalProjectCost.toLocaleString("no-NO", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })} kr`,
-    margin,
-    yPosition
-  );
-
-  yPosition += 20;
-
-  // Prosentvis fordeling
   pdf.setFontSize(14);
   pdf.setFont("helvetica", "bold");
-  pdf.text("Prosentvis fordeling", margin, yPosition);
-
-  yPosition += 15;
-  pdf.setFontSize(11);
-  pdf.setFont("helvetica", "normal");
-
-  pdf.text(
-    `Overhead: ${(
-      (data.overheadTotal / data.totalAnnualIndirectCosts) *
-      100
-    ).toFixed(1)}%`,
-    margin,
-    yPosition
-  );
-
+  pdf.text("Kostnadsfordeling", margin, yPosition);
   yPosition += 8;
-  pdf.text(
-    `Utstyr: ${(
-      (data.equipmentTotal / data.totalAnnualIndirectCosts) *
-      100
-    ).toFixed(1)}%`,
-    margin,
-    yPosition
-  );
 
-  yPosition += 8;
-  pdf.text(
-    `Generelt: ${(
-      (data.generalTotal / data.totalAnnualIndirectCosts) *
-      100
-    ).toFixed(1)}%`,
-    margin,
-    yPosition
-  );
+  autoTable(pdf, {
+    startY: yPosition,
+    head: [["Kategori", "Beløp (kr)", "Andel (%)"]],
+    body: [
+      [
+        "Overhead",
+        overheadProjectCost.toLocaleString("no-NO", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+        `${((data.overheadTotal / data.totalAnnualIndirectCosts) * 100).toFixed(
+          1
+        )}%`,
+      ],
+      [
+        "Utstyr",
+        equipmentProjectCost.toLocaleString("no-NO", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+        `${(
+          (data.equipmentTotal / data.totalAnnualIndirectCosts) *
+          100
+        ).toFixed(1)}%`,
+      ],
+      [
+        "Generelt",
+        generalProjectCost.toLocaleString("no-NO", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+        `${((data.generalTotal / data.totalAnnualIndirectCosts) * 100).toFixed(
+          1
+        )}%`,
+      ],
+    ],
+    theme: "plain",
+    styles: {
+      fontSize: 10,
+      cellPadding: 6,
+      lineColor: [borderGray.r, borderGray.g, borderGray.b],
+      lineWidth: 0.5,
+    },
+    headStyles: {
+      fillColor: [softGray.r, softGray.g, softGray.b],
+      textColor: [textDark.r, textDark.g, textDark.b],
+      fontStyle: "bold",
+    },
+    alternateRowStyles: {
+      fillColor: [253, 253, 253],
+    },
+    margin: { left: margin, right: margin },
+  });
 
-  yPosition += 25;
+  yPosition = (pdf as any).lastAutoTable.finalY + 20;
 
   // Bedriftsparametere
   pdf.setFontSize(14);
   pdf.setFont("helvetica", "bold");
   pdf.text("Bedriftsparametere", margin, yPosition);
-
-  yPosition += 15;
-  pdf.setFontSize(11);
-  pdf.setFont("helvetica", "normal");
-
-  pdf.text(`Antall ansatte: ${data.numberOfEmployees}`, margin, yPosition);
-
   yPosition += 8;
-  pdf.text(
-    `Gjennomsnittlige timer per ansatt/år: ${data.averageHoursPerEmployee.toLocaleString()}`,
-    margin,
-    yPosition
-  );
 
-  yPosition += 8;
-  pdf.text(
-    `Totale årlige produksjonstimer: ${data.totalAnnualHours.toLocaleString()}`,
-    margin,
-    yPosition
-  );
+  autoTable(pdf, {
+    startY: yPosition,
+    head: [["Parameter", "Verdi"]],
+    body: [
+      ["Antall ansatte", data.numberOfEmployees.toString()],
+      ["Timer per ansatt/år", data.averageHoursPerEmployee.toLocaleString()],
+      ["Totale årlige timer", data.totalAnnualHours.toLocaleString()],
+      [
+        "Totale indirekte kostnader",
+        `${data.totalAnnualIndirectCosts.toLocaleString()} kr`,
+      ],
+    ],
+    theme: "plain",
+    styles: {
+      fontSize: 10,
+      cellPadding: 6,
+      lineColor: [borderGray.r, borderGray.g, borderGray.b],
+      lineWidth: 0.5,
+    },
+    headStyles: {
+      fillColor: [softBlue.r, softBlue.g, softBlue.b],
+      textColor: [textDark.r, textDark.g, textDark.b],
+      fontStyle: "bold",
+    },
+    margin: { left: margin, right: margin },
+  });
 
-  yPosition += 8;
-  pdf.text(
-    `Totale årlige indirekte kostnader: ${data.totalAnnualIndirectCosts.toLocaleString()} kr`,
-    margin,
-    yPosition
-  );
+  yPosition = (pdf as any).lastAutoTable.finalY + 25;
 
-  // Ny side hvis nødvendig
-  if (yPosition > 250) {
+  // Sjekk om vi trenger ny side
+  if (yPosition > 200) {
     pdf.addPage();
     yPosition = 30;
-  } else {
-    yPosition += 25;
   }
 
-  // Detaljert kostnadssammendrag
+  // Detaljerte kostnader
   pdf.setFontSize(14);
   pdf.setFont("helvetica", "bold");
   pdf.text("Detaljert kostnadssammendrag", margin, yPosition);
-
   yPosition += 15;
-  pdf.setFontSize(10);
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Overheadkostnader:", margin, yPosition);
 
-  yPosition += 8;
-  pdf.setFont("helvetica", "normal");
-  data.overheadCosts.forEach((item) => {
-    pdf.text(
-      `• ${item.name}: ${item.amount.toLocaleString()} kr`,
-      margin + 5,
-      yPosition
-    );
-    yPosition += 6;
+  // Overhead tabell
+  pdf.setFontSize(12);
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Overheadkostnader", margin, yPosition);
+  yPosition += 5;
+
+  autoTable(pdf, {
+    startY: yPosition,
+    head: [["Beskrivelse", "Beløp (kr)"]],
+    body: data.overheadCosts.map((item) => [
+      item.name,
+      item.amount.toLocaleString("no-NO"),
+    ]),
+    foot: [["Total overhead", data.overheadTotal.toLocaleString("no-NO")]],
+    theme: "plain",
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      lineColor: [borderGray.r, borderGray.g, borderGray.b],
+      lineWidth: 0.3,
+    },
+    headStyles: {
+      fillColor: [255, 240, 240], // Lys rød
+      textColor: [textDark.r, textDark.g, textDark.b],
+      fontStyle: "bold",
+      fontSize: 9,
+    },
+    footStyles: {
+      fillColor: [softGray.r, softGray.g, softGray.b],
+      fontStyle: "bold",
+      fontSize: 9,
+    },
+    margin: { left: margin, right: margin },
   });
 
-  yPosition += 5;
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Utstyrskostnader:", margin, yPosition);
+  yPosition = (pdf as any).lastAutoTable.finalY + 15;
 
-  yPosition += 8;
-  pdf.setFont("helvetica", "normal");
-  data.equipmentCosts.forEach((item) => {
-    pdf.text(
-      `• ${item.name}: ${item.amount.toLocaleString()} kr`,
-      margin + 5,
-      yPosition
-    );
-    yPosition += 6;
+  // Utstyr tabell
+  pdf.setFontSize(12);
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Utstyrskostnader", margin, yPosition);
+  yPosition += 5;
+
+  autoTable(pdf, {
+    startY: yPosition,
+    head: [["Beskrivelse", "Beløp (kr)"]],
+    body: data.equipmentCosts.map((item) => [
+      item.name,
+      item.amount.toLocaleString("no-NO"),
+    ]),
+    foot: [["Total utstyr", data.equipmentTotal.toLocaleString("no-NO")]],
+    theme: "plain",
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      lineColor: [borderGray.r, borderGray.g, borderGray.b],
+      lineWidth: 0.3,
+    },
+    headStyles: {
+      fillColor: [240, 240, 255], // Lys blå
+      textColor: [textDark.r, textDark.g, textDark.b],
+      fontStyle: "bold",
+      fontSize: 9,
+    },
+    footStyles: {
+      fillColor: [softGray.r, softGray.g, softGray.b],
+      fontStyle: "bold",
+      fontSize: 9,
+    },
+    margin: { left: margin, right: margin },
   });
 
-  yPosition += 5;
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Generelle kostnader:", margin, yPosition);
+  yPosition = (pdf as any).lastAutoTable.finalY + 15;
 
-  yPosition += 8;
-  pdf.setFont("helvetica", "normal");
-  data.generalCosts.forEach((item) => {
-    pdf.text(
-      `• ${item.name}: ${item.amount.toLocaleString()} kr`,
-      margin + 5,
-      yPosition
-    );
-    yPosition += 6;
+  // Sjekk om vi trenger ny side
+  if (yPosition > 200) {
+    pdf.addPage();
+    yPosition = 30;
+  }
+
+  // Generelle kostnader tabell
+  pdf.setFontSize(12);
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Generelle kostnader", margin, yPosition);
+  yPosition += 5;
+
+  autoTable(pdf, {
+    startY: yPosition,
+    head: [["Beskrivelse", "Beløp (kr)"]],
+    body: data.generalCosts.map((item) => [
+      item.name,
+      item.amount.toLocaleString("no-NO"),
+    ]),
+    foot: [["Total generelt", data.generalTotal.toLocaleString("no-NO")]],
+    theme: "plain",
+    styles: {
+      fontSize: 9,
+      cellPadding: 4,
+      lineColor: [borderGray.r, borderGray.g, borderGray.b],
+      lineWidth: 0.3,
+    },
+    headStyles: {
+      fillColor: [softOrange.r, softOrange.g, softOrange.b],
+      textColor: [textDark.r, textDark.g, textDark.b],
+      fontStyle: "bold",
+      fontSize: 9,
+    },
+    footStyles: {
+      fillColor: [softGray.r, softGray.g, softGray.b],
+      fontStyle: "bold",
+      fontSize: 9,
+    },
+    margin: { left: margin, right: margin },
   });
 
   // Footer
   const pageHeight = pdf.internal.pageSize.getHeight();
+  pdf.setTextColor(108, 117, 125);
   pdf.setFontSize(8);
-  pdf.setTextColor(128, 128, 128);
   pdf.text(
-    `Rapport generert av Indirekte Kostnadskalkulator - ${new Date().toLocaleDateString(
-      "no-NO"
-    )}`,
+    `Rapport generert av Indirekte Kostnadskalkulator`,
     margin,
     pageHeight - 15
   );
