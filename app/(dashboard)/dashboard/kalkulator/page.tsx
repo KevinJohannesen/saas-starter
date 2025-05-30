@@ -1,7 +1,5 @@
 "use client";
-
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -31,6 +29,7 @@ import {
   FileText,
   Settings,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface CostItem {
   name: string;
@@ -199,128 +198,23 @@ export default function CalculatorPage() {
     }
   };
 
-  // Hent lagrede innstillinger når komponenten lastes
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        const response = await fetch("/api/team/settings");
-        if (!response.ok) {
-          console.error(`HTTP error! status: ${response.status}`);
-          return; // Ikke kast feil, bruk bare standardverdier
-        }
-        const settings = await response.json();
-        console.log("Loaded settings:", settings);
-
-        if (settings && !settings.error) {
-          setNumberOfEmployees(settings.numberOfEmployees);
-          setAverageHoursPerEmployee(settings.averageHoursPerEmployee);
-          if (settings.overheadCosts) setOverheadCosts(settings.overheadCosts);
-          if (settings.equipmentCosts)
-            setEquipmentCosts(settings.equipmentCosts);
-          if (settings.generalCosts) setGeneralCosts(settings.generalCosts);
-        }
-      } catch (error) {
-        console.error("Feil ved henting av innstillinger:", error);
-        // Behold standardverdiene
-      }
-    }
-
-    loadSettings();
-  }, []);
-
-  // Hent lagrede prosjekter når komponenten lastes
-  useEffect(() => {
-    async function loadProjects() {
-      try {
-        const response = await fetch("/api/team/projects");
-        if (!response.ok) {
-          console.error(`HTTP error! status: ${response.status}`);
-          return; // Ikke kast feil, bruk bare standardverdier
-        }
-        const projects = await response.json();
-        console.log("Loaded projects:", projects);
-        if (Array.isArray(projects)) {
-          setSavedProjects(projects);
-        }
-      } catch (error) {
-        console.error("Feil ved henting av prosjekter:", error);
-        // Behold standardverdiene
-      }
-    }
-
-    loadProjects();
-  }, []);
-
-  // Lagre innstillinger når de endres
-  const saveSettings = async () => {
-    try {
-      await fetch("/api/team/settings", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          numberOfEmployees,
-          averageHoursPerEmployee,
-          overheadCosts,
-          equipmentCosts,
-          generalCosts,
-        }),
-      });
-    } catch (error) {
-      console.error("Feil ved lagring av innstillinger:", error);
-    }
-  };
-
-  // Oppdater saveProject funksjonen
-  const saveProject = async () => {
+  // Lagre gjeldende prosjekt
+  const saveProject = () => {
     if (!projectName) return;
 
-    try {
-      const newProject = {
-        name: projectName,
-        hours: projectHours,
-        cost: projectIndirectCost,
-      };
+    const newProject = {
+      name: projectName,
+      hours: projectHours,
+      cost: projectIndirectCost,
+    };
 
-      await fetch("/api/team/projects", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newProject),
-      });
-
-      // Hent oppdatert liste med prosjekter
-      const response = await fetch("/api/team/projects");
-      const projects = await response.json();
-      setSavedProjects(projects);
-
-      // Nullstill input-feltene
-      setProjectName("");
-      setProjectHours(140);
-    } catch (error) {
-      console.error("Feil ved lagring av prosjekt:", error);
-    }
+    setSavedProjects([...savedProjects, newProject]);
+    setProjectName("");
+    setProjectHours(140);
   };
 
-  // Legg til auto-save for innstillinger
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      saveSettings();
-    }, 1000); // Lagre 1 sekund etter siste endring
-
-    return () => clearTimeout(timeoutId);
-  }, [
-    numberOfEmployees,
-    averageHoursPerEmployee,
-    overheadCosts,
-    equipmentCosts,
-    generalCosts,
-  ]);
-
   return (
-    <div className="container mx-auto px-4 py-6 space-y-6">
+    <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
           Indirekte Kostnadskalkulator
