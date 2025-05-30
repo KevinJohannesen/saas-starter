@@ -32,6 +32,7 @@ import {
   Settings,
 } from "lucide-react";
 import { generateProjectReport } from "@/components/pdf-report-generator";
+import { toast } from "sonner";
 
 interface CostItem {
   name: string;
@@ -257,10 +258,16 @@ export default function CalculatorPage() {
     loadProjects();
   }, []);
 
-  // Lagre innstillinger når de endres
+  // Legg til state for lagringsstatus
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  // Oppdater saveSettings funksjonen
   const saveSettings = async () => {
+    setIsSaving(true);
     try {
-      await fetch("/api/team/settings", {
+      const response = await fetch("/api/team/settings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -273,10 +280,58 @@ export default function CalculatorPage() {
           generalCosts,
         }),
       });
+
+      if (response.ok) {
+        setHasUnsavedChanges(false);
+        setLastSaved(new Date());
+        toast.success("Innstillinger lagret!", {
+          description: "Bedriftsinnstillingene er trygt lagret i databasen.",
+        });
+      } else {
+        throw new Error("Lagring feilet");
+      }
     } catch (error) {
       console.error("Feil ved lagring av innstillinger:", error);
+      toast.error("Lagring feilet", {
+        description: "Kunne ikke lagre innstillingene. Prøv igjen.",
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  // Ny funksjon for eksplisitt lagring
+  const handleSaveSettings = async () => {
+    await saveSettings();
+  };
+
+  // Oppdater useEffect for å markere endringer
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [
+    numberOfEmployees,
+    averageHoursPerEmployee,
+    overheadCosts,
+    equipmentCosts,
+    generalCosts,
+  ]);
+
+  // Fjern den automatiske lagringen eller gjør den mindre hyppig
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (hasUnsavedChanges) {
+        saveSettings();
+      }
+    }, 5000); // Øk til 5 sekunder
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    numberOfEmployees,
+    averageHoursPerEmployee,
+    overheadCosts,
+    equipmentCosts,
+    generalCosts,
+  ]);
 
   // Oppdater saveProject funksjonen
   const saveProject = async () => {
@@ -714,7 +769,54 @@ export default function CalculatorPage() {
                     {averageHoursPerEmployee} timer hver
                   </div>
                 </div>
+
+                {/* Legg til lagringsstatus */}
+                <div className="rounded-md bg-muted p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">Lagringsstatus</div>
+                      <div className="text-sm text-muted-foreground">
+                        {lastSaved
+                          ? `Sist lagret: ${lastSaved.toLocaleTimeString(
+                              "no-NO"
+                            )}`
+                          : "Ikke lagret ennå"}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {hasUnsavedChanges && (
+                        <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded">
+                          Ulagrede endringer
+                        </span>
+                      )}
+                      {!hasUnsavedChanges && lastSaved && (
+                        <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                          Lagret
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </CardContent>
+              <CardFooter>
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={isSaving || !hasUnsavedChanges}
+                  className="w-full"
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
+                      Lagrer...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Lagre innstillinger
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
             </Card>
 
             <Card>
@@ -1000,6 +1102,61 @@ export default function CalculatorPage() {
               </Card>
             </TabsContent>
           </Tabs>
+
+          {/* Legg til en global lagre-knapp øverst i settings-fanen */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Lagre alle innstillinger
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Lagre alle bedriftsparametere og kostnader trygt i databasen
+                  </p>
+                </div>
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={isSaving || !hasUnsavedChanges}
+                  size="lg"
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
+                      Lagrer...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      {hasUnsavedChanges ? "Lagre endringer" : "Alt er lagret"}
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Visuell indikator */}
+              <div className="mt-4 p-3 rounded-lg border">
+                <div className="flex items-center space-x-2">
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      hasUnsavedChanges ? "bg-orange-500" : "bg-green-500"
+                    }`}
+                  />
+                  <span className="text-sm">
+                    {hasUnsavedChanges
+                      ? "Du har ulagrede endringer"
+                      : "Alle innstillinger er lagret i databasen"}
+                  </span>
+                </div>
+                {lastSaved && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sist lagret: {lastSaved.toLocaleDateString("no-NO")} kl.{" "}
+                    {lastSaved.toLocaleTimeString("no-NO")}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
