@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash, ExternalLink } from "lucide-react";
+import { Plus, Trash, ExternalLink, Loader2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -32,16 +32,20 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-// Definere typen for en lenke
+// Define the type for a link (matching database schema)
 interface LinkItem {
-  id: string;
+  id: number;
   title: string;
   url: string;
-  description: string;
+  description: string | null;
   category: string;
+  teamId: number;
+  createdBy: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-// Gruppere lenker etter kategori
+// Group links by category
 interface LinkGroups {
   [key: string]: LinkItem[];
 }
@@ -50,98 +54,43 @@ export default function LenkeadministrasjonPage() {
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [activeTab, setActiveTab] = useState("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
 
   // Form state
-  const [newLink, setNewLink] = useState<Omit<LinkItem, "id">>({
+  const [newLink, setNewLink] = useState({
     title: "",
     url: "",
     description: "",
     category: "suppliers",
   });
 
-  // Last inn lenker fra localStorage når komponenten lastes
-  useEffect(() => {
-    const savedLinks = localStorage.getItem("intranet-links");
-    if (savedLinks) {
-      setLinks(JSON.parse(savedLinks));
-    } else {
-      // Standard lenker hvis ingen er lagret
-      const defaultLinks: LinkItem[] = [
-        {
-          id: "1",
-          title: "ABC Byggematerialer",
-          url: "https://abcmaterialer.com",
-          description: "Hovedleverandør av byggematerialer",
-          category: "suppliers",
-        },
-        {
-          id: "2",
-          title: "XYZ Utstyrsutleie",
-          url: "https://xyzutleie.com",
-          description: "Portal for utleie av tungt utstyr",
-          category: "suppliers",
-        },
-        {
-          id: "3",
-          title: "Hurtigbetong",
-          url: "https://hurtigbetong.com",
-          description: "Betongbestillingssystem",
-          category: "suppliers",
-        },
-        {
-          id: "4",
-          title: "Byutviklingsselskapet",
-          url: "https://byutvikling.com",
-          description: "Nåværende kundeportal",
-          category: "clients",
-        },
-        {
-          id: "5",
-          title: "Boligbyggelaget",
-          url: "https://boligbyggelaget.org",
-          description: "Boligprosjektkunde",
-          category: "clients",
-        },
-        {
-          id: "6",
-          title: "Byggforskrifter",
-          url: "https://byggforskrifter.no",
-          description: "Nyeste byggforskrifter og standarder",
-          category: "resources",
-        },
-        {
-          id: "7",
-          title: "Byggebransjeforeningen",
-          url: "https://byggebransjeforeningen.org",
-          description: "Bransjeforeningsressurser",
-          category: "resources",
-        },
-        {
-          id: "8",
-          title: "Materialkalkulator",
-          url: "https://materialkalkulator.no",
-          description: "Beregn materialbehov",
-          category: "tools",
-        },
-        {
-          id: "9",
-          title: "Prosjekttidslinjeverkøy",
-          url: "https://prosjekttidslinje.no",
-          description: "Prosjektplanleggingsverktøy",
-          category: "tools",
-        },
-      ];
-      setLinks(defaultLinks);
-      localStorage.setItem("intranet-links", JSON.stringify(defaultLinks));
+  // Fetch links from the API
+  const fetchLinks = async () => {
+    try {
+      const response = await fetch("/api/team/links");
+      if (!response.ok) {
+        throw new Error("Failed to fetch links");
+      }
+      const data = await response.json();
+      setLinks(data);
+    } catch (error) {
+      console.error("Error fetching links:", error);
+      toast.error("Kunne ikke laste lenker", {
+        description: "Prøv å laste siden på nytt.",
+      });
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  // Load links when component mounts
+  useEffect(() => {
+    fetchLinks();
   }, []);
 
-  // Lagre lenker til localStorage når de endres
-  useEffect(() => {
-    localStorage.setItem("intranet-links", JSON.stringify(links));
-  }, [links]);
-
-  // Gruppere lenker etter kategori
+  // Group links by category
   const groupLinksByCategory = (links: LinkItem[]): LinkGroups => {
     return links.reduce((groups: LinkGroups, link) => {
       const category = link.category;
@@ -153,7 +102,7 @@ export default function LenkeadministrasjonPage() {
     }, {});
   };
 
-  // Filtrer lenker basert på aktiv fane
+  // Filter links based on active tab
   const getFilteredLinks = () => {
     if (activeTab === "all") {
       return links;
@@ -161,8 +110,20 @@ export default function LenkeadministrasjonPage() {
     return links.filter((link) => link.category === activeTab);
   };
 
-  // Legg til ny lenke
-  const handleAddLink = () => {
+  // Handle dialog open for editing
+  const handleEditClick = (link: LinkItem) => {
+    setEditingLink(link);
+    setNewLink({
+      title: link.title,
+      url: link.url,
+      description: link.description || "",
+      category: link.category,
+    });
+    setIsDialogOpen(true);
+  };
+
+  // Add or update link
+  const handleAddOrUpdateLink = async () => {
     if (!newLink.title || !newLink.url) {
       toast.error("Manglende informasjon", {
         description: "Vennligst fyll ut tittel og URL.",
@@ -170,47 +131,106 @@ export default function LenkeadministrasjonPage() {
       return;
     }
 
-    // Ensure URL has protocol
-    let url = newLink.url;
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url;
+    setIsSaving(true);
+    try {
+      if (editingLink) {
+        // Update existing link
+        const response = await fetch(`/api/team/links?id=${editingLink.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(newLink),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update link");
+        }
+
+        const updatedLink = await response.json();
+        setLinks((prev) =>
+          prev.map((link) => (link.id === editingLink.id ? updatedLink : link))
+        );
+
+        toast.success("Lenke oppdatert", {
+          description: `${newLink.title} er oppdatert.`,
+        });
+      } else {
+        // Add new link
+        const response = await fetch("/api/team/links", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(newLink),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to add link");
+        }
+
+        const addedLink = await response.json();
+        setLinks((prev) => [...prev, addedLink]);
+
+        toast.success("Lenke lagt til", {
+          description: `${newLink.title} er lagt til i ${getCategoryName(
+            newLink.category
+          )}.`,
+        });
+      }
+
+      setIsDialogOpen(false);
+      setEditingLink(null);
+
+      // Reset form
+      setNewLink({
+        title: "",
+        url: "",
+        description: "",
+        category: "suppliers",
+      });
+    } catch (error) {
+      console.error("Error saving link:", error);
+      toast.error(
+        editingLink
+          ? "Kunne ikke oppdatere lenke"
+          : "Kunne ikke legge til lenke",
+        {
+          description: "Prøv igjen senere.",
+        }
+      );
+    } finally {
+      setIsSaving(false);
     }
-
-    const newLinkItem: LinkItem = {
-      ...newLink,
-      url,
-      id: Date.now().toString(),
-    };
-
-    setLinks((prev) => [...prev, newLinkItem]);
-    setIsDialogOpen(false);
-
-    toast.success("Lenke lagt til", {
-      description: `${newLink.title} er lagt til i ${getCategoryName(
-        newLink.category
-      )}.`,
-    });
-
-    // Reset form
-    setNewLink({
-      title: "",
-      url: "",
-      description: "",
-      category: "suppliers",
-    });
   };
 
-  // Fjern lenke
-  const handleRemoveLink = (id: string) => {
+  // Remove link
+  const handleRemoveLink = async (id: number) => {
     const linkToRemove = links.find((link) => link.id === id);
-    setLinks((prev) => prev.filter((link) => link.id !== id));
 
-    toast.success("Lenke fjernet", {
-      description: `${linkToRemove?.title} er fjernet.`,
-    });
+    try {
+      const response = await fetch(`/api/team/links?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete link");
+      }
+
+      setLinks((prev) => prev.filter((link) => link.id !== id));
+
+      toast.success("Lenke fjernet", {
+        description: `${linkToRemove?.title} er fjernet.`,
+      });
+    } catch (error) {
+      console.error("Error deleting link:", error);
+      toast.error("Kunne ikke fjerne lenke", {
+        description: "Prøv igjen senere.",
+      });
+    }
   };
 
-  // Få kategorinavn på norsk
+  // Get category name in Norwegian
   const getCategoryName = (category: string): string => {
     switch (category) {
       case "suppliers":
@@ -226,9 +246,17 @@ export default function LenkeadministrasjonPage() {
     }
   };
 
-  // Grupperte lenker for "all" visning
+  // Grouped links for "all" view
   const groupedLinks = groupLinksByCategory(links);
   const filteredLinks = getFilteredLinks();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -238,10 +266,24 @@ export default function LenkeadministrasjonPage() {
             Lenkeadministrasjon
           </h1>
           <p className="text-muted-foreground">
-            Administrer og organiser alle dine viktige nettlenker
+            Administrer og organiser alle teamets viktige nettlenker
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog
+          open={isDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingLink(null);
+              setNewLink({
+                title: "",
+                url: "",
+                description: "",
+                category: "suppliers",
+              });
+            }
+            setIsDialogOpen(open);
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -250,9 +292,13 @@ export default function LenkeadministrasjonPage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Legg til ny lenke</DialogTitle>
+              <DialogTitle>
+                {editingLink ? "Rediger lenke" : "Legg til ny lenke"}
+              </DialogTitle>
               <DialogDescription>
-                Fyll ut informasjonen for å legge til en ny lenke i din samling.
+                {editingLink
+                  ? "Oppdater informasjonen for denne lenken."
+                  : "Fyll ut informasjonen for å legge til en ny lenke som hele teamet kan bruke."}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -312,10 +358,19 @@ export default function LenkeadministrasjonPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDialogOpen(false);
+                  setEditingLink(null);
+                }}
+              >
                 Avbryt
               </Button>
-              <Button onClick={handleAddLink}>Legg til lenke</Button>
+              <Button onClick={handleAddOrUpdateLink} disabled={isSaving}>
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editingLink ? "Oppdater lenke" : "Legg til lenke"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -346,6 +401,7 @@ export default function LenkeadministrasjonPage() {
                       key={link.id}
                       link={link}
                       onRemove={() => handleRemoveLink(link.id)}
+                      onEdit={() => handleEditClick(link)}
                     />
                   ))}
                 </CardContent>
@@ -380,6 +436,7 @@ export default function LenkeadministrasjonPage() {
                       key={link.id}
                       link={link}
                       onRemove={() => handleRemoveLink(link.id)}
+                      onEdit={() => handleEditClick(link)}
                     />
                   ))
                 ) : (
@@ -402,9 +459,11 @@ export default function LenkeadministrasjonPage() {
 function LinkCard({
   link,
   onRemove,
+  onEdit,
 }: {
   link: LinkItem;
   onRemove: () => void;
+  onEdit: () => void;
 }) {
   // Ensure URL has protocol
   const getFullUrl = (url: string) => {
@@ -419,14 +478,24 @@ function LinkCard({
       <div className="p-4 space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="font-medium">{link.title}</h3>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onRemove}
-            className="h-8 w-8"
-          >
-            <Trash className="h-4 w-4" />
-          </Button>
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onEdit}
+              className="h-8 w-8"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onRemove}
+              className="h-8 w-8"
+            >
+              <Trash className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">{link.description}</p>
         <a

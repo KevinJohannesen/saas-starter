@@ -42,7 +42,16 @@ export const teamMembers = pgTable("team_members", {
     .notNull()
     .references(() => teams.id),
   role: varchar("role", { length: 50 }).notNull(),
+  position: varchar("position", { length: 100 }),
+  department: varchar("department", { length: 100 }),
+  phone: varchar("phone", { length: 20 }),
+  address: text("address"),
+  hireDate: timestamp("hire_date"),
+  emergencyContact: text("emergency_contact"),
+  skills: jsonb("skills").default([]),
+  certifications: jsonb("certifications").default([]),
   joinedAt: timestamp("joined_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const activityLogs = pgTable("activity_logs", {
@@ -96,12 +105,29 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const teamLinks = pgTable("team_links", {
+  id: serial("id").primaryKey(),
+  teamId: integer("team_id")
+    .notNull()
+    .references(() => teams.id, { onDelete: "cascade" }),
+  title: varchar("title", { length: 255 }).notNull(),
+  url: text("url").notNull(),
+  description: text("description"),
+  category: varchar("category", { length: 50 }).notNull(),
+  createdBy: integer("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const teamsRelations = relations(teams, ({ many }) => ({
   teamMembers: many(teamMembers),
   activityLogs: many(activityLogs),
   invitations: many(invitations),
   settings: many(teamSettings),
   projects: many(projects),
+  links: many(teamLinks),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -156,6 +182,17 @@ export const projectsRelations = relations(projects, ({ one }) => ({
   }),
 }));
 
+export const teamLinksRelations = relations(teamLinks, ({ one }) => ({
+  team: one(teams, {
+    fields: [teamLinks.teamId],
+    references: [teams.id],
+  }),
+  createdByUser: one(users, {
+    fields: [teamLinks.createdBy],
+    references: [users.id],
+  }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Team = typeof teams.$inferSelect;
@@ -175,6 +212,8 @@ export type TeamDataWithMembers = Team & {
     user: Pick<User, "id" | "name" | "email">;
   })[];
 };
+export type TeamLink = typeof teamLinks.$inferSelect;
+export type NewTeamLink = typeof teamLinks.$inferInsert;
 
 export enum ActivityType {
   SIGN_UP = "SIGN_UP",

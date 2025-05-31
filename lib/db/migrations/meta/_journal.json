@@ -15,6 +15,13 @@
       "when": 1748642449257,
       "tag": "0001_overrated_mother_askani",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1748702371945,
+      "tag": "0002_lyrical_bloodstorm",
+      "breakpoints": true
     }
   ]
 }
