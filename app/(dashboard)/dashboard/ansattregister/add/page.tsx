@@ -1,7 +1,5 @@
 "use client";
 
-import type React from "react";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -24,33 +22,73 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 
 export default function AddEmployeePage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    position: "",
+    department: "",
+    hireDate: "",
+    address: "",
+    emergencyContact: "",
+    skills: "",
+    certifications: "",
+    role: "member",
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { id, value } = e.target;
+    setFormData((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleSelectChange = (id: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // I en virkelig applikasjon ville du lagre dette i en database
-    // For nå simulerer vi bare en vellykket innsending
-    setTimeout(() => {
-      setIsSubmitting(false);
-      toast({
-        title: "Ansatt lagt til",
+    try {
+      const response = await fetch("/api/team/employees", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add employee");
+      }
+
+      toast.success("Ansatt lagt til", {
         description: "Den nye ansatte er lagt til i systemet.",
       });
-      router.push("/employees");
-    }, 1000);
+      router.push("/dashboard/ansattregister");
+    } catch (error) {
+      console.error("Error adding employee:", error);
+      toast.error("Kunne ikke legge til ansatt", {
+        description: "Prøv igjen senere.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
-        <Link href="/employees">
+        <Link href="/dashboard/ansattregister">
           <Button variant="ghost" size="icon">
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -71,28 +109,58 @@ export default function AddEmployeePage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="first-name">Fornavn</Label>
-                <Input id="first-name" required />
+                <Label htmlFor="firstName">Fornavn</Label>
+                <Input
+                  id="firstName"
+                  required
+                  value={formData.firstName}
+                  onChange={handleChange}
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="last-name">Etternavn</Label>
-                <Input id="last-name" required />
+                <Label htmlFor="lastName">Etternavn</Label>
+                <Input
+                  id="lastName"
+                  required
+                  value={formData.lastName}
+                  onChange={handleChange}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">E-post</Label>
-                <Input id="email" type="email" required />
+                <Input
+                  id="email"
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={handleChange}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Telefon</Label>
-                <Input id="phone" type="tel" required />
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={formData.phone}
+                  onChange={handleChange}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="position">Stilling</Label>
-                <Input id="position" required />
+                <Input
+                  id="position"
+                  value={formData.position}
+                  onChange={handleChange}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="department">Avdeling</Label>
-                <Select required>
+                <Select
+                  value={formData.department}
+                  onValueChange={(value) =>
+                    handleSelectChange("department", value)
+                  }
+                >
                   <SelectTrigger id="department">
                     <SelectValue placeholder="Velg avdeling" />
                   </SelectTrigger>
@@ -110,21 +178,49 @@ export default function AddEmployeePage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="hire-date">Ansettelsesdato</Label>
-                <Input id="hire-date" type="date" required />
+                <Label htmlFor="hireDate">Ansettelsesdato</Label>
+                <Input
+                  id="hireDate"
+                  type="date"
+                  value={formData.hireDate}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">Rolle</Label>
+                <Select
+                  value={formData.role}
+                  onValueChange={(value) => handleSelectChange("role", value)}
+                >
+                  <SelectTrigger id="role">
+                    <SelectValue placeholder="Velg rolle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Administrator</SelectItem>
+                    <SelectItem value="manager">Leder</SelectItem>
+                    <SelectItem value="member">Medlem</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="address">Adresse</Label>
-              <Textarea id="address" rows={3} />
+              <Textarea
+                id="address"
+                rows={3}
+                value={formData.address}
+                onChange={handleChange}
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="emergency-contact">Nødkontakt</Label>
+              <Label htmlFor="emergencyContact">Nødkontakt</Label>
               <Input
-                id="emergency-contact"
+                id="emergencyContact"
                 placeholder="Navn - Telefonnummer"
+                value={formData.emergencyContact}
+                onChange={handleChange}
               />
             </div>
           </CardContent>
@@ -140,6 +236,8 @@ export default function AddEmployeePage() {
                 id="skills"
                 placeholder="Prosjektplanlegging, Teamledelse, Budsjettstyring"
                 rows={2}
+                value={formData.skills}
+                onChange={handleChange}
               />
             </div>
 
@@ -151,6 +249,8 @@ export default function AddEmployeePage() {
                 id="certifications"
                 placeholder="Prosjektledersertifisering, HMS-kurs, Førstehjelp"
                 rows={2}
+                value={formData.certifications}
+                onChange={handleChange}
               />
             </div>
           </CardContent>
@@ -164,7 +264,14 @@ export default function AddEmployeePage() {
               Avbryt
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Legger til..." : "Legg til ansatt"}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Legger til...
+                </>
+              ) : (
+                "Legg til ansatt"
+              )}
             </Button>
           </CardFooter>
         </form>

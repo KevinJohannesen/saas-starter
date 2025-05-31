@@ -23,14 +23,33 @@ export const users = pgTable("users", {
 
 export const teams = pgTable("teams", {
   id: serial("id").primaryKey(),
-  name: varchar("name", { length: 100 }).notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
   stripeCustomerId: text("stripe_customer_id").unique(),
   stripeSubscriptionId: text("stripe_subscription_id").unique(),
   stripeProductId: text("stripe_product_id"),
   planName: varchar("plan_name", { length: 50 }),
   subscriptionStatus: varchar("subscription_status", { length: 20 }),
+  // Company Information
+  companyName: text("company_name").notNull(),
+  companyAddress: text("company_address").notNull(),
+  companyPhone: text("company_phone").notNull(),
+  companyEmail: text("company_email").notNull(),
+  companyWebsite: text("company_website"),
+  companyOrgNumber: text("company_org_number"),
+  companyVatNumber: text("company_vat_number"),
+  // Company Settings
+  theme: text("theme").default("light").notNull(),
+  logo: text("logo"),
+  primaryColor: text("primary_color").default("#000000").notNull(),
+  secondaryColor: text("secondary_color").default("#ffffff").notNull(),
+  timezone: text("timezone").default("Europe/Oslo").notNull(),
+  language: text("language").default("no").notNull(),
+  currency: text("currency").default("NOK").notNull(),
+  dateFormat: text("date_format").default("DD.MM.YYYY").notNull(),
+  timeFormat: text("time_format").default("24").notNull(),
 });
 
 export const teamMembers = pgTable("team_members", {
@@ -195,7 +214,11 @@ export const teamLinksRelations = relations(teamLinks, ({ one }) => ({
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
-export type Team = typeof teams.$inferSelect;
+export type Team = typeof teams.$inferSelect & {
+  members?: TeamMember[];
+  settings?: TeamSettings;
+  projects?: Project[];
+};
 export type NewTeam = typeof teams.$inferInsert;
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type NewTeamMember = typeof teamMembers.$inferInsert;

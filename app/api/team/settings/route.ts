@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db/drizzle";
-import { teamSettings, teamMembers } from "@/lib/db/schema";
+import { teamSettings, teamMembers, teams } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getUser } from "@/lib/db/queries";
 
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Hent teamId for brukeren
+    // Get teamId for the user
     const userTeam = await db
       .select({ teamId: teamMembers.teamId })
       .from(teamMembers)
@@ -156,50 +156,37 @@ export async function POST(request: Request) {
     const teamId = userTeam[0].teamId;
     const data = await request.json();
 
-    console.log("Saving settings for team:", teamId);
+    // Update team settings
+    const [updatedTeam] = await db
+      .update(teams)
+      .set({
+        name: data.companyName,
+        companyName: data.companyName,
+        companyAddress: data.companyAddress,
+        companyPhone: data.companyPhone,
+        companyEmail: data.companyEmail,
+        companyWebsite: data.companyWebsite || null,
+        companyOrgNumber: data.companyOrgNumber || null,
+        companyVatNumber: data.companyVatNumber || null,
+        theme: data.theme,
+        timezone: data.timezone,
+        language: data.language,
+        currency: data.currency,
+        dateFormat: data.dateFormat,
+        timeFormat: data.timeFormat,
+        updatedAt: new Date(),
+      })
+      .where(eq(teams.id, teamId))
+      .returning();
 
-    try {
-      const existingSettings = await db
-        .select()
-        .from(teamSettings)
-        .where(eq(teamSettings.teamId, teamId))
-        .limit(1);
-
-      if (existingSettings.length > 0) {
-        const [updated] = await db
-          .update(teamSettings)
-          .set({
-            numberOfEmployees: data.numberOfEmployees,
-            averageHoursPerEmployee: data.averageHoursPerEmployee,
-            overheadCosts: data.overheadCosts,
-            equipmentCosts: data.equipmentCosts,
-            generalCosts: data.generalCosts,
-            updatedAt: new Date(),
-          })
-          .where(eq(teamSettings.teamId, teamId))
-          .returning();
-        return NextResponse.json(updated);
-      } else {
-        const [newSettings] = await db
-          .insert(teamSettings)
-          .values({
-            teamId: teamId,
-            numberOfEmployees: data.numberOfEmployees,
-            averageHoursPerEmployee: data.averageHoursPerEmployee,
-            overheadCosts: data.overheadCosts,
-            equipmentCosts: data.equipmentCosts,
-            generalCosts: data.generalCosts,
-          })
-          .returning();
-        return NextResponse.json(newSettings);
-      }
-    } catch (dbError) {
-      console.error("Database error when saving settings:", dbError);
+    if (!updatedTeam) {
       return NextResponse.json(
-        { error: "Failed to save settings" },
+        { error: "Failed to update team settings" },
         { status: 500 }
       );
     }
+
+    return NextResponse.json(updatedTeam);
   } catch (error) {
     console.error("Error in POST /api/team/settings:", error);
     return NextResponse.json(

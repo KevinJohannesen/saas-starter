@@ -22,6 +22,13 @@
       "when": 1748702371945,
       "tag": "0002_lyrical_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1748733929774,
+      "tag": "0003_early_lizard",
+      "breakpoints": true
     }
   ]
 }
