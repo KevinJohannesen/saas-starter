@@ -1,5 +1,7 @@
 "use client";
+
 import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -29,11 +31,19 @@ import {
   FileText,
   Settings,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { generateProjectReport } from "@/components/pdf-report-generator";
+import { toast } from "sonner";
 
 interface CostItem {
   name: string;
   amount: number;
+}
+
+interface SavedProject {
+  id?: number; // Legg til optional id
+  name: string;
+  hours: number;
+  cost: number;
 }
 
 export default function CalculatorPage() {
@@ -68,9 +78,7 @@ export default function CalculatorPage() {
   // Prosjektspesifikk kalkulator
   const [projectHours, setProjectHours] = useState(140);
   const [projectName, setProjectName] = useState("");
-  const [savedProjects, setSavedProjects] = useState<
-    { name: string; hours: number; cost: number }[]
-  >([
+  const [savedProjects, setSavedProjects] = useState<SavedProject[]>([
     { name: "Sentrum Kontorbygg", hours: 1200, cost: 0 },
     { name: "Riksvei Brureparasjon", hours: 850, cost: 0 },
     { name: "Boligkompleks", hours: 2400, cost: 0 },
@@ -198,23 +206,232 @@ export default function CalculatorPage() {
     }
   };
 
-  // Lagre gjeldende prosjekt
-  const saveProject = () => {
+  // Hent lagrede innstillinger når komponenten lastes
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const response = await fetch("/api/team/settings");
+        if (!response.ok) {
+          console.error(`HTTP error! status: ${response.status}`);
+          return; // Ikke kast feil, bruk bare standardverdier
+        }
+        const settings = await response.json();
+        console.log("Loaded settings:", settings);
+
+        if (settings && !settings.error) {
+          setNumberOfEmployees(settings.numberOfEmployees);
+          setAverageHoursPerEmployee(settings.averageHoursPerEmployee);
+          if (settings.overheadCosts) setOverheadCosts(settings.overheadCosts);
+          if (settings.equipmentCosts)
+            setEquipmentCosts(settings.equipmentCosts);
+          if (settings.generalCosts) setGeneralCosts(settings.generalCosts);
+        }
+      } catch (error) {
+        console.error("Feil ved henting av innstillinger:", error);
+        // Behold standardverdiene
+      }
+    }
+
+    loadSettings();
+  }, []);
+
+  // Hent lagrede prosjekter når komponenten lastes
+  useEffect(() => {
+    async function loadProjects() {
+      try {
+        const response = await fetch("/api/team/projects");
+        if (!response.ok) {
+          console.error(`HTTP error! status: ${response.status}`);
+          return; // Ikke kast feil, bruk bare standardverdier
+        }
+        const projects = await response.json();
+        console.log("Loaded projects:", projects);
+        if (Array.isArray(projects)) {
+          setSavedProjects(projects);
+        }
+      } catch (error) {
+        console.error("Feil ved henting av prosjekter:", error);
+        // Behold standardverdiene
+      }
+    }
+
+    loadProjects();
+  }, []);
+
+  // Legg til state for lagringsstatus
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  // Oppdater saveSettings funksjonen
+  const saveSettings = async () => {
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/team/settings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          numberOfEmployees,
+          averageHoursPerEmployee,
+          overheadCosts,
+          equipmentCosts,
+          generalCosts,
+        }),
+      });
+
+      if (response.ok) {
+        setHasUnsavedChanges(false);
+        setLastSaved(new Date());
+        toast.success("Innstillinger lagret!", {
+          description: "Bedriftsinnstillingene er trygt lagret i databasen.",
+        });
+      } else {
+        throw new Error("Lagring feilet");
+      }
+    } catch (error) {
+      console.error("Feil ved lagring av innstillinger:", error);
+      toast.error("Lagring feilet", {
+        description: "Kunne ikke lagre innstillingene. Prøv igjen.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Ny funksjon for eksplisitt lagring
+  const handleSaveSettings = async () => {
+    await saveSettings();
+  };
+
+  // Oppdater useEffect for å markere endringer
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [
+    numberOfEmployees,
+    averageHoursPerEmployee,
+    overheadCosts,
+    equipmentCosts,
+    generalCosts,
+  ]);
+
+  // Fjern den automatiske lagringen eller gjør den mindre hyppig
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (hasUnsavedChanges) {
+        saveSettings();
+      }
+    }, 5000); // Øk til 5 sekunder
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    numberOfEmployees,
+    averageHoursPerEmployee,
+    overheadCosts,
+    equipmentCosts,
+    generalCosts,
+  ]);
+
+  // Oppdater saveProject funksjonen
+  const saveProject = async () => {
     if (!projectName) return;
 
-    const newProject = {
-      name: projectName,
-      hours: projectHours,
-      cost: projectIndirectCost,
+    try {
+      const newProject = {
+        name: projectName,
+        hours: projectHours,
+        cost: projectIndirectCost,
+      };
+
+      await fetch("/api/team/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newProject),
+      });
+
+      // Hent oppdatert liste med prosjekter
+      const response = await fetch("/api/team/projects");
+      const projects = await response.json();
+      setSavedProjects(projects);
+
+      // Nullstill input-feltene
+      setProjectName("");
+      setProjectHours(140);
+    } catch (error) {
+      console.error("Feil ved lagring av prosjekt:", error);
+    }
+  };
+
+  // Legg til auto-save for innstillinger
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      saveSettings();
+    }, 1000); // Lagre 1 sekund etter siste endring
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    numberOfEmployees,
+    averageHoursPerEmployee,
+    overheadCosts,
+    equipmentCosts,
+    generalCosts,
+  ]);
+
+  // Legg til denne funksjonen i CalculatorPage komponenten:
+  const deleteProject = async (projectId: number | undefined) => {
+    if (!projectId) {
+      console.error("Kan ikke slette prosjekt uten ID");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/team/projects?id=${projectId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Hent oppdatert liste med prosjekter
+      const projectsResponse = await fetch("/api/team/projects");
+      if (projectsResponse.ok) {
+        const projects = await projectsResponse.json();
+        if (Array.isArray(projects)) {
+          setSavedProjects(projects);
+        }
+      }
+    } catch (error) {
+      console.error("Feil ved sletting av prosjekt:", error);
+    }
+  };
+
+  const handleExportReport = () => {
+    const reportData = {
+      projectName,
+      projectHours,
+      projectIndirectCost,
+      indirectCostRate,
+      numberOfEmployees,
+      averageHoursPerEmployee,
+      totalAnnualHours,
+      totalAnnualIndirectCosts,
+      overheadCosts,
+      equipmentCosts,
+      generalCosts,
+      overheadTotal,
+      equipmentTotal,
+      generalTotal,
     };
 
-    setSavedProjects([...savedProjects, newProject]);
-    setProjectName("");
-    setProjectHours(140);
+    generateProjectReport(reportData);
   };
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto px-4 py-6 space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
           Indirekte Kostnadskalkulator
@@ -426,7 +643,7 @@ export default function CalculatorPage() {
                 </div>
               </CardContent>
               <CardFooter className="justify-end">
-                <Button variant="outline">
+                <Button variant="outline" onClick={handleExportReport}>
                   <Download className="mr-2 h-4 w-4" />
                   Eksporter rapport
                 </Button>
@@ -454,11 +671,12 @@ export default function CalculatorPage() {
                       Indirekte kostnad
                     </TableHead>
                     <TableHead className="text-right">Sats</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {savedProjects.map((project, index) => (
-                    <TableRow key={index}>
+                    <TableRow key={project.id || `temp-${index}`}>
                       <TableCell className="font-medium">
                         {project.name}
                       </TableCell>
@@ -474,6 +692,22 @@ export default function CalculatorPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         {indirectCostRate.toFixed(2)} kr/t
+                      </TableCell>
+                      <TableCell>
+                        {project.id ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteProject(project.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Eksempel
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -535,7 +769,54 @@ export default function CalculatorPage() {
                     {averageHoursPerEmployee} timer hver
                   </div>
                 </div>
+
+                {/* Legg til lagringsstatus */}
+                <div className="rounded-md bg-muted p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium">Lagringsstatus</div>
+                      <div className="text-sm text-muted-foreground">
+                        {lastSaved
+                          ? `Sist lagret: ${lastSaved.toLocaleTimeString(
+                              "no-NO"
+                            )}`
+                          : "Ikke lagret ennå"}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {hasUnsavedChanges && (
+                        <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded">
+                          Ulagrede endringer
+                        </span>
+                      )}
+                      {!hasUnsavedChanges && lastSaved && (
+                        <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded">
+                          Lagret
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </CardContent>
+              <CardFooter>
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={isSaving || !hasUnsavedChanges}
+                  className="w-full"
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
+                      Lagrer...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Lagre innstillinger
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
             </Card>
 
             <Card>
@@ -821,6 +1102,61 @@ export default function CalculatorPage() {
               </Card>
             </TabsContent>
           </Tabs>
+
+          {/* Legg til en global lagre-knapp øverst i settings-fanen */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Lagre alle innstillinger
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Lagre alle bedriftsparametere og kostnader trygt i databasen
+                  </p>
+                </div>
+                <Button
+                  onClick={handleSaveSettings}
+                  disabled={isSaving || !hasUnsavedChanges}
+                  size="lg"
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
+                      Lagrer...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      {hasUnsavedChanges ? "Lagre endringer" : "Alt er lagret"}
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Visuell indikator */}
+              <div className="mt-4 p-3 rounded-lg border">
+                <div className="flex items-center space-x-2">
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      hasUnsavedChanges ? "bg-orange-500" : "bg-green-500"
+                    }`}
+                  />
+                  <span className="text-sm">
+                    {hasUnsavedChanges
+                      ? "Du har ulagrede endringer"
+                      : "Alle innstillinger er lagret i databasen"}
+                  </span>
+                </div>
+                {lastSaved && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Sist lagret: {lastSaved.toLocaleDateString("no-NO")} kl.{" "}
+                    {lastSaved.toLocaleTimeString("no-NO")}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
