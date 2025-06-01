@@ -33,6 +33,7 @@
     "dotenv": "^16.5.0",
     "drizzle-kit": "^0.31.1",
     "drizzle-orm": "^0.43.1",
+    "html2canvas": "^1.4.1",
     "jose": "^6.0.11",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",

@@ -12,6 +12,8 @@ import {
   Menu,
   CalculatorIcon,
   Link as LinkIcon,
+  FileText,
+  Home,
 } from "lucide-react";
 
 export default function DashboardLayout({
@@ -23,6 +25,7 @@ export default function DashboardLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const navItems = [
+    { href: "/dashboard", icon: Home, label: "Dashboard" },
     { href: "/dashboard/team", icon: Users, label: "Team" },
     { href: "/dashboard/general", icon: Settings, label: "General" },
     { href: "/dashboard/activity", icon: Activity, label: "Activity" },
@@ -37,6 +40,11 @@ export default function DashboardLayout({
       href: "/dashboard/selskapsinformasjon",
       icon: Settings,
       label: "Bedriftsinformasjon",
+    },
+    {
+      href: "/dashboard/fakturaer",
+      icon: FileText,
+      label: "Fakturaer",
     },
   ];
 
