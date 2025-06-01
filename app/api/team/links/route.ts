@@ -143,3 +143,69 @@ export async function DELETE(request: Request) {
     );
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get teamId for the user
+    const userTeam = await db
+      .select({ teamId: teamMembers.teamId })
+      .from(teamMembers)
+      .where(eq(teamMembers.userId, user.id))
+      .limit(1);
+
+    if (!userTeam.length) {
+      return NextResponse.json({ error: "No team found" }, { status: 404 });
+    }
+
+    const teamId = userTeam[0].teamId;
+    const { searchParams } = new URL(request.url);
+    const linkId = searchParams.get("id");
+
+    if (!linkId) {
+      return NextResponse.json(
+        { error: "Link ID is required" },
+        { status: 400 }
+      );
+    }
+
+    const data = await request.json();
+
+    // Ensure URL has protocol
+    let url = data.url;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = "https://" + url;
+    }
+
+    // Update the link, but only if it belongs to the user's team
+    const [updatedLink] = await db
+      .update(teamLinks)
+      .set({
+        title: data.title,
+        url: url,
+        description: data.description || null,
+        category: data.category,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(teamLinks.id, parseInt(linkId)), eq(teamLinks.teamId, teamId))
+      )
+      .returning();
+
+    if (!updatedLink) {
+      return NextResponse.json({ error: "Link not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(updatedLink);
+  } catch (error) {
+    console.error("Error in PUT /api/team/links:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}

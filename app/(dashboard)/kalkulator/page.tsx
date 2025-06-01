@@ -425,6 +425,11 @@ export default function CalculatorPage() {
       overheadTotal,
       equipmentTotal,
       generalTotal,
+      companyName: "Din Bedrift", // Default verdi
+      companyAddress: "Bedriftsadresse", // Default verdi
+      companyPhone: "", // Kan være tom
+      companyEmail: "", // Kan være tom
+      companyOrgNumber: "", // Kan være tom
     };
 
     generateProjectReport(reportData);

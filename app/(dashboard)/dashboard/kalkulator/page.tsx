@@ -84,6 +84,15 @@ export default function CalculatorPage() {
     { name: "Boligkompleks", hours: 2400, cost: 0 },
   ]);
 
+  // Add company information state
+  const [companyInfo, setCompanyInfo] = useState({
+    companyName: "",
+    companyAddress: "",
+    companyPhone: "",
+    companyEmail: "",
+    companyOrgNumber: "",
+  });
+
   // Beregn totaler
   const calculateTotal = (items: CostItem[]) => {
     return items.reduce((sum, item) => sum + item.amount, 0);
@@ -258,6 +267,28 @@ export default function CalculatorPage() {
     loadProjects();
   }, []);
 
+  // Load company information
+  useEffect(() => {
+    async function loadCompanyInfo() {
+      try {
+        const response = await fetch("/api/team");
+        if (response.ok) {
+          const data = await response.json();
+          setCompanyInfo({
+            companyName: data.companyName || "",
+            companyAddress: data.companyAddress || "",
+            companyPhone: data.companyPhone || "",
+            companyEmail: data.companyEmail || "",
+            companyOrgNumber: data.companyOrgNumber || "",
+          });
+        }
+      } catch (error) {
+        console.error("Error loading company information:", error);
+      }
+    }
+    loadCompanyInfo();
+  }, []);
+
   // Legg til state for lagringsstatus
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -425,6 +456,8 @@ export default function CalculatorPage() {
       overheadTotal,
       equipmentTotal,
       generalTotal,
+      // Add company information
+      ...companyInfo,
     };
 
     generateProjectReport(reportData);

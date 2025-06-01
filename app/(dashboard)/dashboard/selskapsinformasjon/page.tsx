@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -34,6 +34,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 const companyFormSchema = z.object({
   companyName: z.string().min(2, "Bedriftsnavn må være minst 2 tegn"),
@@ -65,28 +68,51 @@ const companyFormSchema = z.object({
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
 
-export default function OnboardingPage() {
+export default function SelskapsinformasjonPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { data: teamData, error } = useSWR("/api/team", fetcher);
 
   const form = useForm<CompanyFormValues>({
     resolver: zodResolver(companyFormSchema),
     defaultValues: {
-      companyName: "",
-      companyAddress: "",
-      companyPhone: "",
-      companyEmail: "",
-      companyWebsite: "",
-      companyOrgNumber: "",
-      companyVatNumber: "",
-      theme: "light",
-      timezone: "Europe/Oslo",
-      language: "no",
-      currency: "NOK",
-      dateFormat: "DD.MM.YYYY",
-      timeFormat: "24",
+      companyName: teamData?.companyName || "",
+      companyAddress: teamData?.companyAddress || "",
+      companyPhone: teamData?.companyPhone || "",
+      companyEmail: teamData?.companyEmail || "",
+      companyWebsite: teamData?.companyWebsite || "",
+      companyOrgNumber: teamData?.companyOrgNumber || "",
+      companyVatNumber: teamData?.companyVatNumber || "",
+      theme: teamData?.theme || "light",
+      timezone: teamData?.timezone || "Europe/Oslo",
+      language: teamData?.language || "no",
+      currency: teamData?.currency || "NOK",
+      dateFormat: teamData?.dateFormat || "DD.MM.YYYY",
+      timeFormat: teamData?.timeFormat || "24",
     },
   });
+
+  // Update form values when team data is loaded
+  useEffect(() => {
+    if (teamData) {
+      form.reset({
+        companyName: teamData.companyName || "",
+        companyAddress: teamData.companyAddress || "",
+        companyPhone: teamData.companyPhone || "",
+        companyEmail: teamData.companyEmail || "",
+        companyWebsite: teamData.companyWebsite || "",
+        companyOrgNumber: teamData.companyOrgNumber || "",
+        companyVatNumber: teamData.companyVatNumber || "",
+        theme: teamData.theme || "light",
+        timezone: teamData.timezone || "Europe/Oslo",
+        language: teamData.language || "no",
+        currency: teamData.currency || "NOK",
+        dateFormat: teamData.dateFormat || "DD.MM.YYYY",
+        timeFormat: teamData.timeFormat || "24",
+      });
+    }
+  }, [teamData, form]);
 
   async function onSubmit(data: CompanyFormValues) {
     setIsSubmitting(true);
@@ -107,7 +133,7 @@ export default function OnboardingPage() {
         description: "Din bedriftsinformasjon er nå lagret.",
       });
 
-      router.push("/dashboard");
+      router.refresh();
     } catch (error) {
       console.error("Error updating company information:", error);
       toast.error("Kunne ikke oppdatere bedriftsinformasjon", {
@@ -122,9 +148,9 @@ export default function OnboardingPage() {
     <div className="container max-w-2xl py-10">
       <Card>
         <CardHeader>
-          <CardTitle>Velkommen til din nye bedrift</CardTitle>
+          <CardTitle>Selskapsinformasjon</CardTitle>
           <CardDescription>
-            Fyll inn informasjon om din bedrift for å komme i gang
+            Fyll inn informasjon om ditt selskap
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -386,7 +412,7 @@ export default function OnboardingPage() {
                     Lagrer...
                   </>
                 ) : (
-                  "Fullfør oppsett"
+                  "Lagre endringer"
                 )}
               </Button>
             </form>

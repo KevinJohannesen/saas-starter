@@ -21,13 +21,20 @@ interface ProjectReportData {
   overheadTotal: number;
   equipmentTotal: number;
   generalTotal: number;
+  companyName: string;
+  companyAddress: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyOrgNumber: string;
 }
 
 export const generateProjectReport = (data: ProjectReportData) => {
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 20;
   let yPosition = 30;
+  let currentPage = 1;
 
   // Myke farger (Tripletex-stil)
   const softBlue = { r: 240, g: 248, b: 255 };
@@ -36,6 +43,58 @@ export const generateProjectReport = (data: ProjectReportData) => {
   const softOrange = { r: 255, g: 250, b: 240 };
   const borderGray = { r: 220, g: 220, b: 220 };
   const textDark = { r: 33, g: 37, b: 41 };
+
+  // Function to add footer to a page
+  const addFooter = (pageNumber: number) => {
+    const footerY = pageHeight - 40;
+    pdf.setTextColor(108, 117, 125);
+    pdf.setFontSize(8);
+
+    // Add company information footer
+    pdf.setFont("helvetica", "bold");
+    pdf.text(data.companyName || "Bedrift", margin, footerY);
+
+    pdf.setFont("helvetica", "normal");
+    const addressLines = (data.companyAddress || "").split("\n");
+    addressLines.forEach((line, index) => {
+      pdf.text(line, margin, footerY + 6 + index * 4);
+    });
+
+    const contactInfo = [
+      data.companyPhone ? `Tlf: ${data.companyPhone}` : null,
+      data.companyEmail ? `E-post: ${data.companyEmail}` : null,
+      data.companyOrgNumber ? `Org.nr: ${data.companyOrgNumber}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    if (contactInfo) {
+      pdf.text(contactInfo, margin, footerY + 6 + addressLines.length * 4);
+    }
+
+    // Add page number and report generator text
+    pdf.text(
+      `Side ${pageNumber} | Rapport generert av Indirekte Kostnadskalkulator`,
+      margin,
+      pageHeight - 15
+    );
+  };
+
+  // Function to check if we need a new page
+  const checkNewPage = (requiredSpace: number) => {
+    if (yPosition + requiredSpace > pageHeight - 60) {
+      // Leave space for footer
+      addFooter(currentPage);
+      pdf.addPage();
+      currentPage++;
+      yPosition = 30;
+      return true;
+    }
+    return false;
+  };
+
+  // Add footer to first page
+  addFooter(currentPage);
 
   // Header - enkel og ren
   pdf.setTextColor(textDark.r, textDark.g, textDark.b);
@@ -57,6 +116,7 @@ export const generateProjectReport = (data: ProjectReportData) => {
   pdf.setTextColor(textDark.r, textDark.g, textDark.b);
 
   // Prosjektinformasjon - myk boks
+  checkNewPage(30);
   pdf.setFillColor(softBlue.r, softBlue.g, softBlue.b);
   pdf.setDrawColor(borderGray.r, borderGray.g, borderGray.b);
   pdf.rect(margin, yPosition - 8, pageWidth - 2 * margin, 30, "FD");
@@ -86,6 +146,7 @@ export const generateProjectReport = (data: ProjectReportData) => {
   yPosition += 40;
 
   // Hovedresultat - myk grønn boks
+  checkNewPage(35);
   pdf.setFillColor(softGreen.r, softGreen.g, softGreen.b);
   pdf.setDrawColor(borderGray.r, borderGray.g, borderGray.b);
   pdf.rect(margin, yPosition, pageWidth - 2 * margin, 35, "FD");
@@ -116,6 +177,7 @@ export const generateProjectReport = (data: ProjectReportData) => {
   const generalProjectCost =
     (data.generalTotal / data.totalAnnualHours) * data.projectHours;
 
+  checkNewPage(30);
   pdf.setFontSize(14);
   pdf.setFont("helvetica", "bold");
   pdf.text("Kostnadsfordeling", margin, yPosition);
@@ -173,11 +235,16 @@ export const generateProjectReport = (data: ProjectReportData) => {
       fillColor: [253, 253, 253],
     },
     margin: { left: margin, right: margin },
+    didDrawPage: function (data) {
+      // Add footer to each page after it's drawn
+      addFooter(currentPage);
+    },
   });
 
   yPosition = (pdf as any).lastAutoTable.finalY + 20;
 
   // Bedriftsparametere
+  checkNewPage(30);
   pdf.setFontSize(14);
   pdf.setFont("helvetica", "bold");
   pdf.text("Bedriftsparametere", margin, yPosition);
@@ -208,23 +275,23 @@ export const generateProjectReport = (data: ProjectReportData) => {
       fontStyle: "bold",
     },
     margin: { left: margin, right: margin },
+    didDrawPage: function (data) {
+      // Add footer to each page after it's drawn
+      addFooter(currentPage);
+    },
   });
 
   yPosition = (pdf as any).lastAutoTable.finalY + 25;
 
-  // Sjekk om vi trenger ny side
-  if (yPosition > 200) {
-    pdf.addPage();
-    yPosition = 30;
-  }
-
   // Detaljerte kostnader
+  checkNewPage(30);
   pdf.setFontSize(14);
   pdf.setFont("helvetica", "bold");
   pdf.text("Detaljert kostnadssammendrag", margin, yPosition);
   yPosition += 15;
 
   // Overhead tabell
+  checkNewPage(30);
   pdf.setFontSize(12);
   pdf.setFont("helvetica", "bold");
   pdf.text("Overheadkostnader", margin, yPosition);
@@ -257,11 +324,16 @@ export const generateProjectReport = (data: ProjectReportData) => {
       fontSize: 9,
     },
     margin: { left: margin, right: margin },
+    didDrawPage: function (data) {
+      // Add footer to each page after it's drawn
+      addFooter(currentPage);
+    },
   });
 
   yPosition = (pdf as any).lastAutoTable.finalY + 15;
 
   // Utstyr tabell
+  checkNewPage(30);
   pdf.setFontSize(12);
   pdf.setFont("helvetica", "bold");
   pdf.text("Utstyrskostnader", margin, yPosition);
@@ -294,17 +366,16 @@ export const generateProjectReport = (data: ProjectReportData) => {
       fontSize: 9,
     },
     margin: { left: margin, right: margin },
+    didDrawPage: function (data) {
+      // Add footer to each page after it's drawn
+      addFooter(currentPage);
+    },
   });
 
   yPosition = (pdf as any).lastAutoTable.finalY + 15;
 
-  // Sjekk om vi trenger ny side
-  if (yPosition > 200) {
-    pdf.addPage();
-    yPosition = 30;
-  }
-
   // Generelle kostnader tabell
+  checkNewPage(30);
   pdf.setFontSize(12);
   pdf.setFont("helvetica", "bold");
   pdf.text("Generelle kostnader", margin, yPosition);
@@ -337,17 +408,11 @@ export const generateProjectReport = (data: ProjectReportData) => {
       fontSize: 9,
     },
     margin: { left: margin, right: margin },
+    didDrawPage: function (data) {
+      // Add footer to each page after it's drawn
+      addFooter(currentPage);
+    },
   });
-
-  // Footer
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  pdf.setTextColor(108, 117, 125);
-  pdf.setFontSize(8);
-  pdf.text(
-    `Rapport generert av Indirekte Kostnadskalkulator`,
-    margin,
-    pageHeight - 15
-  );
 
   // Last ned PDF-en
   const fileName = data.projectName

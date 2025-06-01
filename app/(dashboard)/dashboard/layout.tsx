@@ -23,7 +23,7 @@ export default function DashboardLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const navItems = [
-    { href: "/dashboard", icon: Users, label: "Team" },
+    { href: "/dashboard/team", icon: Users, label: "Team" },
     { href: "/dashboard/general", icon: Settings, label: "General" },
     { href: "/dashboard/activity", icon: Activity, label: "Activity" },
     { href: "/dashboard/security", icon: Shield, label: "Security" },
@@ -33,6 +33,11 @@ export default function DashboardLayout({
       label: "Kalkulator",
     },
     { href: "/dashboard/lenker", icon: LinkIcon, label: "Lenker" },
+    {
+      href: "/dashboard/selskapsinformasjon",
+      icon: Settings,
+      label: "Bedriftsinformasjon",
+    },
   ];
 
   return (
